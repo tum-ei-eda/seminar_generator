@@ -219,7 +219,7 @@ class GradingReport:
 
         row = row+2
         ags.write(row,0,'Paper:')
-        #ags.write(row,1,'<PAPER GRADE>')
+        ags.write(row,1,student_.getPaperGrade())
         self.paperRow = row
         self.paperCol = 1
 
@@ -236,6 +236,9 @@ class GradingReport:
         for examiner_i in self.examiners:
             row = row + 1
             ags.write(row,1,examiner_i)
+            if student_.presentationGradeExists(examiner_i):
+                ags.write(row,2,student_.getPresentationStyleGrade(examiner_i))
+                ags.write(row,3,student_.getPresentationContentGrade(examiner_i))
             if isFirst:
                 firstExaminerRow = row
                 isFirst = False

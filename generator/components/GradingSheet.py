@@ -34,7 +34,7 @@ class GradingSheetConfig:
         importantnoticestyle_gs= style = easyxf('font: bold 1, color red;')
         self.importantnoticestyle_gs = importantnoticestyle_gs
 
-class GradingSheet:
+class EmptyGradingSheet:
 
     def __init__(self, userName_):
 
@@ -143,6 +143,7 @@ class GradingSheet:
         row = row+1
         ags_.write(row,0,'Student:')
         ags_.write(row,1,(student_.firstName + " " + student_.lastName))
+        ags_.write(row,2,student_.matNr)
 
         row = row+1
         ags_.write(row,0,'Points:')
@@ -163,6 +164,7 @@ class GradingSheet:
         row = row+1
         ags_.write(row,0,'Student:')
         ags_.write(row,1,(student_.firstName + ' ' + student_.lastName))
+        ags_.write(row,2,student_.matNr)
 
         row = row+1
         ags_.write(row,0,'Points - Presentation Style:')
