@@ -6,9 +6,11 @@ class Student:
         self.matNr = matNr_
         self.firstName = firstName_
         self.lastName = lastName_
-        self.fullName = firstName_ + " " + lastName_
+        self.fullName = ""
+        self.updateFullName()
         self.email = email_
         self.topic = topic_
+        self.talkNr = 0
         self.advisor = advisor_
         self.grades = Grades(self)
 
@@ -29,6 +31,20 @@ class Student:
 
     def getPresentationContentGrade(self, examiner_):
         return self.grades.getPresentationContent(examiner_)
+
+    def updateLastName(self, name_):
+        self.lastName = name_
+        self.updateFullName()
+
+    def updateFirstName(self, name_):
+        self.firstName = name_
+        self.updateFullName()
+
+    def updateFullName(self):
+        self.fullName = self.firstName + " " + self.lastName
+
+    def getGradingSheetID(self):
+        return (str(self.talkNr) + "_" + self.firstName) # TODO: Fix handling of empty last names
 
 class Grades:
 
@@ -83,6 +99,9 @@ class Advisor:
     def addStudent(self, matNr_):
         self.students.append(int(matNr_))
 
+    def getNumStudents(self):
+        return len(self.students)
+
 class Seminar:
 
     def __init__(self, dir_):
@@ -118,6 +137,9 @@ class Seminar:
     def getStudentDict(self):
         return self.studentDict
 
+    def getStudentList(self):
+        return self.studentDict.values()
+
     def createOrUpdateAdvisor(self, student_):
         if student_.advisor not in self.advisorDict:
             self.advisorDict[student_.advisor] = Advisor(student_.advisor)
@@ -126,7 +148,20 @@ class Seminar:
     def getAdvisorList(self):
         return self.advisorDict.values()
 
+    def getAdvisor(self, name_):
+        if name_ not in self.advisorDict:
+            print("ERROR: Cannot find \'" + name_ + "\' in the advisor-dictionary. CHECK IF NAME MISSPELLED!")
+            sys.exit()
+        return self.advisorDict[name_]
+
     def setSessions(self, sessions_):
+
+        talkNr = 1
+        for session_i in sessions_:
+            for student_i in session_i:
+                student_i.talkNr = talkNr
+                talkNr += 1
+
         self.sessions = sessions_
 
     def getSessions(self):

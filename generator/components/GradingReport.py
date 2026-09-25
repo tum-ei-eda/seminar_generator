@@ -175,7 +175,9 @@ class GradingReport:
 
             # Get paper points and calculate grade
             col = col+1
-            ags.write(row,col,Formula(self.__getExcelLink(student_i.lastName,self.paperRow, self.paperCol)))
+            
+            print(self.__getExcelLink(student_i.getGradingSheetID(),self.paperRow, self.paperCol))
+            ags.write(row,col,Formula(self.__getExcelLink(student_i.getGradingSheetID(),self.paperRow, self.paperCol)))
             paperLinkCell = self.__getExcelCellName(row,col)
             col = col+1
             ags.write(row,col,Formula("IF(" + paperLinkCell + "=\"ne\";\"ne\";2*" + paperLinkCell +")"))
@@ -185,10 +187,10 @@ class GradingReport:
 
             # Get talk points and calculate grade
             col = col + 1
-            ags.write(row,col,Formula(self.__getExcelLink(student_i.lastName,self.talkStyleRow,self.talkStyleCol)))
+            ags.write(row,col,Formula(self.__getExcelLink(student_i.getGradingSheetID(),self.talkStyleRow,self.talkStyleCol)))
             talkStyleCell = self.__getExcelCellName(row,col)
             col = col +1
-            ags.write(row,col,Formula(self.__getExcelLink(student_i.lastName,self.talkContentRow,self.talkContentCol)))
+            ags.write(row,col,Formula(self.__getExcelLink(student_i.getGradingSheetID(),self.talkContentRow,self.talkContentCol)))
             talkContentCell = self.__getExcelCellName(row,col)
             col = col + 1
             ags.write(row,col,Formula("IF(" + talkStyleCell + "=\"ne\";\"ne\";IF(" + talkContentCell + "=\"ne\";\"ne\";" + talkStyleCell + "+" + talkContentCell + "))"))
@@ -202,9 +204,8 @@ class GradingReport:
 
             
     def __createStudentSheet(self, student_):
-        
-        # TODO: Last name unique enough?
-        ags = self.sheet.add_sheet((student_.lastName))
+
+        ags = self.sheet.add_sheet(student_.getGradingSheetID())
         ags.protect = False
 
         row = 1

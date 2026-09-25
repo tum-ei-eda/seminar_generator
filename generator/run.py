@@ -5,6 +5,8 @@ import pathlib
 import csv
 import os
 import sys
+import re
+import pickle
 
 from xlrd import open_workbook,xldate_as_tuple
 
@@ -14,6 +16,16 @@ from components.Contributors import Seminar
 
 from components.GradingSheet import EmptyGradingSheet
 from components.GradingReport import GradingReport
+from components.Agenda import AgendaPlanning
+from components.Agenda import Agenda
+
+def checkSpecialCharacter(str_):
+    
+    if str_ in ("-"):
+        return False
+    
+    pattern = r"[^a-zA-Z\s]"
+    return bool(re.search(pattern, str_))
 
 def importSeminar(inDir_):
     
@@ -45,8 +57,10 @@ def importSeminar(inDir_):
 
         if student_i["PLACE"] == "Confirmed place":
 
-            # TODO: MatNr in CSV has a starting white space, which messes up cast to int. Currently removed manually. Find way to do this automatically!
-            matNr = int(student_i["MATRICULATION NUMBER"])
+            matNr_str = student_i["MATRICULATION NUMBER"]
+            if matNr_str.startswith(""):
+                matNr_str = matNr_str[1:]
+            matNr = int(matNr_str)
 
             print(" > Adding student " + student_i["LAST NAME"] + " (" + str(matNr) + ")")
 
@@ -56,40 +70,108 @@ def importSeminar(inDir_):
 
             # Create student object and add to dictionary
             student = Student(  matNr, 
-                                student_i["FIRST NAME"], 
-                                student_i["LAST NAME"], # TODO: Special characters and white space not supported! Currently removed by hand in csv. Automate!!
+                                student_i["FIRST NAME"].replace(" ",""), 
+                                student_i["LAST NAME"].replace(" ",""),
                                 student_i["EMAIL"], 
                                 topic, 
                                 advisor)
             seminar.addStudent(student)
             seminar.createOrUpdateAdvisor(student)
 
-    print("Planning sessions...")
+    # Check student names for special characters
+    for student_i in seminar.getStudentList():
+        isNew = False
+        if checkSpecialCharacter(student_i.firstName):
+            student_i.updateFirstName(input(f"Student {student_i.fullName}: First name ({student_i.firstName}) contains unsupported characters. Please enter a version containing standard letters (a-zA-Z):"))
+            isNew = True
+        if checkSpecialCharacter(student_i.lastName):
+            student_i.updateLastName(input(f"Student {student_i.fullName}: Last name ({student_i.lastName}) contains unsupported characters. Please enter a version containing standard letters (a-zA-Z):"))
+            isNew = True
+        if isNew:
+            print(f"New name: {student_i.fullName}")
 
-    # TODO: Hardcoded session planning. Automate!
-    sessions = []
+    # Create sheet for agenda planning
+    print("Create agenda-planning sheet...")
+    agendaPlan = AgendaPlanning()
+    agendaPlan.create(seminar)
+    agendaPlan.print(inDir_)
 
-    session_1 = []
-    session_1.append(seminar.getStudent(int("03710411"))) # Simson
-    session_1.append(seminar.getStudent(int("03750080"))) # Deng
-    session_1.append(seminar.getStudent(int("03765600"))) # Wang
-    sessions.append(session_1)
-
-    session_2 = []
-    session_2.append(seminar.getStudent(int("03767986"))) # Berger
-    session_2.append(seminar.getStudent(int("03677564"))) # Singh
-    session_2.append(seminar.getStudent(int("03765678"))) # Song
-    sessions.append(session_2)
-
-    session_3 = []
-    session_3.append(seminar.getStudent(int("03711460"))) # Häringer
-    session_3.append(seminar.getStudent(int("03774286"))) # Dickgießer
-    session_3.append(seminar.getStudent(int("03763760"))) # Huang
-    sessions.append(session_3)
-
-    seminar.setSessions(sessions)
+    # Store seminar object and return
+    objFile = inDir / "seminar.pkl"
+    with objFile.open("wb") as f:
+        pickle.dump(seminar, f)
 
     return seminar
+
+
+def loadSeminar(inDir_):
+    
+    print("Reading input directory: " + inDir_)
+    inDir = pathlib.Path(inDir_).resolve()
+    if not inDir.is_dir():
+        print("ERROR: Input directory \'" + str(inDir) + "\' does not exist!")
+        sys.exit()
+    
+    objFile = inDir / "seminar.pkl"
+    if not objFile.is_file():
+        print("ERROR: No stored object seminar.pkl. Use --new to import a new list of students!")
+        sys.exit()
+
+    with objFile.open("rb") as f:
+        seminar = pickle.load(f)
+
+    return seminar
+
+
+def createAgenda(seminar_):
+
+    agendaFile = seminar_.getTargetDir() / 'Agenda_Planning.xls'
+    if not agendaFile.is_file():
+        print("Error: Agenda.xls does not exist. Import a new student list to generate this file!")
+        sys.exit()
+
+    print("Read in session-plan...")
+    # Open and read out examiner name
+    wb = open_workbook(str(agendaFile))
+    planning_sheet = wb.sheet_by_name('Planning')
+
+    sessions={}
+    row = 1 # Row offset for first student
+    while(row < planning_sheet.nrows):
+        matNr = int(planning_sheet.cell(row,1).value)
+        sessionNr_str = planning_sheet.cell(row,4).value
+        sessionIndex_str = planning_sheet.cell(row,5).value
+
+        if sessionNr_str == "":
+            print(f"ERROR: No session specified in session-plan row {row}. Assign sessions to all students before running \"create\".")
+            sys.exit()
+        sessionNr = int(sessionNr_str)
+
+        if sessionIndex_str == "":
+            sessionIndex = 100
+        else:
+            sessionIndex = int(sessionIndex_str)
+
+        if not sessionNr in sessions:
+            sessions[sessionNr] = []
+
+        sessions[sessionNr].append((sessionIndex, seminar_.getStudent(matNr)))
+
+        row += 1
+
+    # Sort talks according to session-index:
+    for nr_i, session_i in sessions.items():
+        sortedTalks = [student for _, student in sorted(session_i, key=lambda x: x[0])]
+        sessions[nr_i] = sortedTalks
+
+    # Convert session dictionary into list
+    sessionList = [value for key, value in sorted(sessions.items())]
+    seminar_.setSessions(sessionList)
+
+    print("Create agenda...")
+    agenda = Agenda()
+    agenda.create(seminar_)
+    agenda.print(seminar_.getTargetDir())
 
 
 def createGradingSheets(seminar_):
@@ -142,6 +224,7 @@ def createGradingReport(seminar_):
 
         for sheet_i in wb.sheet_names():
 
+            print(sheet_i)
             if sheet_i == "Overview":
                 continue
             
@@ -149,9 +232,14 @@ def createGradingReport(seminar_):
             if sheet_i == "Paper Grading":
                 paper_sheet = wb.sheet_by_name("Paper Grading")
 
+                # Find advisor
+                advisor = seminar_.getAdvisor(examiner)
+
                 row = 10 # Row offset for first paper. Make this less implicit
-                while(row < paper_sheet.nrows):
-                    
+                #while(row < paper_sheet.nrows):
+                for i in range(advisor.getNumStudents()):
+                    print("ping")
+
                     matNr = paper_sheet.cell(row+1,2).value
                     paperGrade = int(paper_sheet.cell(row+2,1).value)
                     student = seminar_.getStudent(matNr)
@@ -170,7 +258,8 @@ def createGradingReport(seminar_):
                 while(row < session_sheet.nrows):
 
                     matNr = session_sheet.cell(row+1,2).value
-                    if not (session_sheet.cell(row+2,1).value == "<ENTER POINTS (12-0)>" or session_sheet.cell(row+3,1).value == "<ENTER POINTS (12-0)>"):
+                    if not ((session_sheet.cell(row+2,1).value == "<ENTER POINTS (12-0)>" or session_sheet.cell(row+3,1).value == "<ENTER POINTS (12-0)>") \
+                            or (session_sheet.cell(row+2,1).value == "" or session_sheet.cell(row+3,1).value == "")):
                         styleGrade = int(session_sheet.cell(row+2,1).value)
                         contentGrade = int(session_sheet.cell(row+3,1).value)
                         student = seminar_.getStudent(matNr)
@@ -205,15 +294,20 @@ if __name__ == '__main__':
 
     argParser = argparse.ArgumentParser()
     argParser.add_argument("input_dir", help="Path to input directory containing the student list csv-file")
+    argParser.add_argument("--new", "-n", action="store_true", help="Import new student list (csv-file)")
     argParser.add_argument("--create", "-c", action="store_true", help="Create empty grading sheets")
     argParser.add_argument("--grade", "-g", action="store_true", help="Read filled grading sheets and create grading report")
     args = argParser.parse_args()
 
     inputDir=args.input_dir
 
-    seminar = importSeminar(inputDir)
+    if args.new:
+        seminar = importSeminar(inputDir)
+    else:
+        seminar = loadSeminar(inputDir)
 
     if args.create:
+        createAgenda(seminar)
         createGradingSheets(seminar)
     if args.grade:
         createGradingReport(seminar)
